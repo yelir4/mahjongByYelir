@@ -1,0 +1,27 @@
+/* html spans the whole viewport */
+html
+{
+    /* background: red; */
+    margin: 0;
+    padding: 0;
+}
+
+html *
+{
+    margin: 0;
+    padding: 0;
+}
+
+/* body covers the whole of html */
+body
+{
+    background: lightblue;
+    display: flex;
+    height: 100vh;
+}
+
+#gameCanvas
+{
+    background: tan;
+    margin: auto;
+}
