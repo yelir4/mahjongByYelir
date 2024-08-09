@@ -127,7 +127,7 @@ function paintTiles ()
 function paintGroups ()
 {
 
-    context.fillStyle = "green";
+    context.fillStyle = "brown";
     context.fillRect(110,770,1110,20);
 
     // eyes: groups = 5
@@ -143,10 +143,10 @@ function paintGroups ()
     else if (handType == "7 pairs")
     {
         groups = 0;
-        eyes = hand.length / 2;
+        eyes = Math.floor(hand.length/2)-1;
     }
 
-    console.log(groups + " groups");
+    console.log(groups + " groups " + eyes + " eyes");
     for (let i=0; i<groups; ++i)
     {
         // j for tiles
