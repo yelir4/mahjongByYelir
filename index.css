@@ -1,0 +1,59 @@
+/* html spans the whole viewport */
+html
+{
+    /* background: red; */
+    color: #eeeeee;
+    margin: 0;
+    padding: 0;
+}
+
+html *
+{
+    margin: 0;
+    padding: 0;
+}
+
+/* body covers all of html */
+body
+{
+    background: #363636;
+    display: flex;
+    font-family: 'Arial', sans-serif;
+    font-size: 24px;
+    flex-direction: column;
+    height: 100vh;
+    user-select: none; /* disable text selection */
+}
+
+#loginForm
+{
+    /* background-color: red; */
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin: 0.5rem 0;
+    width: 100%;
+    position:absolute;
+}
+
+p
+{
+    margin: auto;
+}
+
+input
+{
+    font-size: 24pt;
+}
+
+button
+{
+    font-size: 18pt;
+}
+
+#gameCanvas
+{
+    background: #783678;
+    display: none;
+    margin: auto;
+}

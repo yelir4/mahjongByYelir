@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>mahjongByYelir</title>
+
+    <link rel="stylesheet" href="index.css">
+    <script defer src="index.js"></script>
+</head>
+
+<body>
+    <form id="loginForm" onsubmit="start()">
+        <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Enter username"
+            minlength="4"
+            maxlength="15"
+            pattern="[A-za-z0-9]+"
+            title="Username must be 4-15 characters long and alphanumeric."
+            required>
+        <button type="submit">Login</button>
+    </form>
+
+    <canvas id="gameCanvas" width="1440" height="810">
+    </canvas>
+</body>
+
+</html>
