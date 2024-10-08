@@ -36,8 +36,7 @@ $response[] = [
     'numberPlayers' => $game['GameNumberPlayers'],
     'turnCount' => $game['GameTurnCount'],
     'seconds' => $game['GameSeconds'],
-    'status' => $game['GameStatus'],
-    'finished' => $game['GameFinished']
+    'status' => $game['GameStatus']
 ];
 
 
@@ -53,6 +52,7 @@ foreach ($players as $player)
         'name' => $player['PlayerName'],
         'hand' => json_decode($player['PlayerHand'], true),
         'melds' => json_decode($player['PlayerMelds'], true),
+        'hold' => json_decode($player['PlayerHold'], true),
         'seat' => $player['PlayerSeat']
     ];
 }

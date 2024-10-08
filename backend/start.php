@@ -193,17 +193,17 @@ if (!isset($_SESSION['user']))
     {
         /** create deck of tiles */
         $flowers = [
-            ['suit' => 'flowers', 'value' => 1, 'color' => 'blue'],
-            ['suit' => 'flowers', 'value' => 5, 'color' => 'red'],
+            ['suit' => 'flowers', 'value' => 1],
+            ['suit' => 'flowers', 'value' => 5],
 
-            ['suit' => 'flowers', 'value' => 2, 'color' => 'blue'],
-            ['suit' => 'flowers', 'value' => 6, 'color' => 'red'],
+            ['suit' => 'flowers', 'value' => 2],
+            ['suit' => 'flowers', 'value' => 6],
 
-            ['suit' => 'flowers', 'value' => 3, 'color' => 'blue'],
-            ['suit' => 'flowers', 'value' => 7, 'color' => 'red'],
+            ['suit' => 'flowers', 'value' => 3],
+            ['suit' => 'flowers', 'value' => 7],
 
-            ['suit' => 'flowers', 'value' => 4, 'color' => 'blue'],
-            ['suit' => 'flowers', 'value' => 8, 'color' => 'red']
+            ['suit' => 'flowers', 'value' => 4],
+            ['suit' => 'flowers', 'value' => 8]
         ];
 
         $bamboos = [

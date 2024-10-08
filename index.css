@@ -22,7 +22,6 @@ body
     font-size: 24px;
     flex-direction: column;
     height: 100vh;
-    user-select: none; /* disable text selection */
 }
 
 #loginForm
@@ -34,6 +33,9 @@ body
     margin: 0.5rem 0;
     width: 100%;
     position:absolute;
+
+    /** ignore hover / clicks */
+    /* pointer-events: none; */
 }
 
 p

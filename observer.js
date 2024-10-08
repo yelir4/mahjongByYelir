@@ -56,6 +56,9 @@ async function observe ()
                 }
                 output += "<hr>";
             }
+
+
+            output2 = JSON.stringify(data);
             gameElt.innerHTML = output;
         }
         catch (error)

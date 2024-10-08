@@ -1,4 +1,4 @@
-console.log("index.js loaded");
+console.log('index.js loaded');
 
 /** global variables */
 let game, user;
@@ -10,17 +10,17 @@ let discardPile;
 let canChow, canPung, canKong, canWin;
 
 /** debugging */
-let debug = true;
+let debug = false;
 let useTileImages = true;
-let debugElt = document.createElement("p");
-debugElt.id = "debug";
+let debugElt = document.createElement('p');
+debugElt.id = 'debug';
 
 /** adjustable colors */
-let bgColor = "#363636";
-let canvasColor = "#783678";
-let darkenColor = "#593659";
+let bgColor = '#363636';
+let canvasColor = '#783678';
+let darkenColor = '#593659';
 let discardColor = darkenColor;
-let white = "white";
+let white = 'white';
 
 /** `arrange` tiles */
 let tileSelected = -1;
@@ -29,6 +29,7 @@ let dragging = false;
 
 /** `eat` tiles */
 let claim = '';
+let claimSent = false;
 let eating = [];
 
 /** eyes, triples, standard, 7 pairs */
@@ -37,6 +38,7 @@ let eyes = 0;
 let total = -1;
 let groups = [];
 let handType = 'standard';
+let eyesFirst = false;
 
 /** tile images */
 let tiles = {};
@@ -60,7 +62,7 @@ async function start ()
     let username = document.getElementById('username').value;
     console.log('username selected: ' + username);
 
-    // send encoded form data with fetch
+    // fetch encoded form data
     try
     {
         let response;
@@ -82,13 +84,8 @@ async function start ()
                 body: JSON.stringify({ username: username })
             });
         }
-
         // check for OK HTTP response (200-299)
         if (!response.ok) throw new Error('network response not ok');
-
-        // @TODO comment this out once u dont suck at coding
-        // console.log("response:");
-        // console.log(response);
 
         // parse JSON response into `data` associative array
         data = await response.json();
@@ -122,13 +119,15 @@ async function start ()
             loginForm.appendChild(welcomeElt);
             debug ? loginForm.appendChild(debugElt) : null;
             loginForm.style.flexDirection = 'column';
+            /** now we can disable text selection */
+            loginForm.style.userSelect = 'none';
 
             /** display canvas */
             canvas.style.display = 'flex';
             /** draw gameID */
             context.font = '18px Arial';
             context.fillStyle = 'black';
-            context.fillText('gameID: ' + game.gameID,1350,18);
+            context.fillText('gameID: ' + game.gameID,1500,18);
             
             // preload tile images
             preloadTiles();
@@ -161,7 +160,7 @@ function between (val, lo, hi)
 
 /**
  * preload tiles ONCE after start.php successfully fetches game data
- * saves into `tiles` array that holds all HTMLElements (images)
+ * save into `tiles` array that holds all HTMLElements (images)
  */
 function preloadTiles ()
 {
@@ -191,7 +190,7 @@ function paintLobby ()
 {
     // paint middle section
     context.fillStyle = discardColor;
-    context.fillRect(200,200,1040,300);
+    context.fillRect(280,200,1040,350);
 
     context.fillStyle = 'black';
     context.font = '22px Arial';
@@ -205,16 +204,16 @@ function paintLobby ()
         switch (pos)
         {
             case 0:
-                [posx, posy] = [450, 460];
+                [posx, posy] = [450,510];
                 break;
             case 1:
-                [posx, posy] = [1100, 320];
+                [posx, posy] = [1220,320];
                 break;
             case 2:
-                [posx, posy] = [630, 230];
+                [posx, posy] = [930,230];
                 break;
             case 3:
-                [posx, posy] = [210, 290];
+                [posx, posy] = [290,290];
                 break;
         }
         context.fillText(player.name,posx,posy);
@@ -223,8 +222,8 @@ function paintLobby ()
 
     /** paint game status, timer */
     context.font = '30px Arial';
-    context.fillText(game.status + '. . .',680,380);
-    game.seconds == -1 ? null : context.fillText(game.seconds,710,350);
+    context.fillText(game.status + '. . .',710,420);
+    game.seconds == -1 ? null : context.fillText(game.seconds,740,390);
 }
 
 /**
@@ -248,24 +247,25 @@ function paintPlayers ()
         switch (pos)
         {
             case 0:
-                [posx, posy] = [100, 570];
+                [posx, posy] = [200,660];
                 break;
             case 1:
-                [posx, posy] = [1240, 510];
+                [posx, posy] = [1400,640];
                 break;
             case 2:
-                [posx, posy] = [1100, 0];
+                [posx, posy] = [1280,0];
                 break;
             case 3:
-                [posx, posy] = [0, 30];
+                [posx, posy] = [0,10];
                 break;
         }
+        /** @TODO highlight game winner in green */
         /** clear space for players */
-        context.fillStyle = white;
+        context.fillStyle = (player.seat == game.turnCount && game.status == 'finished') ? 'lightgreen' : white;
         context.fillRect(posx, posy,200,90);
 
         /** different color for the player whose turn it is */
-        context.fillStyle = (player.seat == game.turnCount) ? 'orange' : 'blue';
+        context.fillStyle = (player.seat == game.turnCount && game.status != 'finished') ? 'orange' : 'blue';
         /** paint players */
         context.fillText(player.name,posx+5,posy+30);
         context.fillText('seat ' + player.seat,posx+5,posy+55);
@@ -302,18 +302,35 @@ function paintGame ()
 function paintDiscard ()
 {
     // NOTE delay updates while dragging tile
+    // @TODO claim sent?
     if (dragging) return;
 
     // paint discard pile, text
+    // miscellaneous things first
     context.fillStyle = discardColor;
-    context.fillRect(200,200,1040,350);
+    context.fillRect(280,200,1040,350);
     context.fillStyle = white;
-    context.fillText('discard pile',1080,540);
+    context.fillText('discard pile',1160,540);
+
+    switch (game.status)
+    {
+        case 'discarded':
+            context.fillText(game.players[game.turnCount].name + ' discarded ' + discardPile[0].value + ' ' + discardPile[0].suit,460,390);
+            context.fillText(game.seconds,1210,520);
+            break;
+    }
+    if (game.status == 'finished')
+    {
+        context.fillStyle = 'lightgreen';
+        context.fillText(game.players[game.turnCount].name + ' won!',750,540);
+    }
+
+
 
     if (game.discardPile.length)
     {
-        /** most recent tile 120x152 */
-        let x = 210;
+        /** most recent discard 120x152 */
+        let x = 290;
 
         /** show tile images or plain */
         if (useTileImages)
@@ -339,13 +356,13 @@ function paintDiscard ()
     for (let i=1; i<game.discardPile.length; ++i)
     {
         // DISPLAY ALL TILES (60x76)
-        let x = 140 + (i*70);
+        let x = 220 + (i*70);
 
         /** paint tile with images or not */
         if (useTileImages)
         {
             // select, paint tile image
-            let tile = tiles[game.discardPile[i].value + ' '  + game.discardPile[i].suit];
+            let tile = tiles[game.discardPile[i].value + ' ' + game.discardPile[i].suit];
             context.drawImage(tile,x,210,60,76);
         }
         else
@@ -365,42 +382,48 @@ function paintDiscard ()
     }
 
     /** paint eat indicators for users that can eat */
-    if (game.status == 'discarded' && user.seat != game.turnCount)
+    // NOTE claim should also be empty for this
+    if (game.status == 'discarded' && user.seat != game.turnCount && claim == '')
     {
         context.font = '30px Arial';
         if (canChow)
         {
             context.fillStyle = 'lightgray';
-            context.fillRect(210, 485, 85, 40);
+            context.fillRect(290,485,85,40);
             context.fillStyle = 'black';
-            context.fillText('chow',215,515);
+            context.fillText('chow',295,515);
         }
 
         if (canPung)
         {
             context.fillStyle = 'lightgray';
-            context.fillRect(305, 485, 85, 40);
+            context.fillRect(385,485,85,40);
             context.fillStyle = 'black';
-            context.fillText('pung',310,515);
+            context.fillText('pung',390,515);
         }
 
         if (canKong)
         {
             context.fillStyle = 'lightgray';
-            context.fillRect(400, 485, 85, 40);
+            context.fillRect(480,485,85,40);
             context.fillStyle = 'black';
-            context.fillText('kong',405,515);
+            context.fillText('kong',485,515);
         }
 
-        if ((canChow || canPung) && total == (triples+eyes-1))
+        // NOTE player canWin if they are `waiting`
+        // i.e. need one more valid group to win
+        // if this is the case, its the rightmost group that is not valid
+        if (total == (triples+eyes-1))
         {
             canWin = true;
+
             context.fillStyle = 'lightgray';
-            context.fillRect(495, 485, 85, 40);
+            context.fillRect(575,485,85,40);
             context.fillStyle = 'black';
-            context.fillText('win',500,515);
-        }
+            context.fillText('win',580,515);
     }
+    }
+
 }
 
 
@@ -412,41 +435,40 @@ function paintDiscard ()
  */
 function paintHand ()
 {
-    // @NOTE delay updates while dragging
-    if (dragging) return;
+    // @NOTE delay updates while dragging or if actively making claim
+    if (dragging || claim != '') return;
 
     // canvas properties
     context.fillStyle = darkenColor;
     context.strokeStyle = white;
     /** bottom bar */
-    context.fillRect(100,670,1200,130);
-    context.strokeRect(100,670,1200,130);
+    context.fillRect(200,760,1200,130);
+    context.strokeRect(200,760,1200,130);
     /** meld bar */
-    context.fillRect(300,571,900,88);
-    context.strokeRect(300,571,900,88);
+    context.fillRect(400,661,900,88);
+    context.strokeRect(400,661,900,88);
 
-    /** @TODO paint melds of other users? */
 
     /** paint tiles */
     for (let i=0; i<hand.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 110 + (i*70);
+        let x = 210 + (i*70);
 
         /** show tile images or plain */
         if (useTileImages)
         {
             // select, paint tile image
             let tile = tiles[hand[i].value + ' ' + hand[i].suit];
-            context.drawImage(tile,x,700,60,76);
+            context.drawImage(tile,x,790,60,76);
         }
         else
         {
             context.fillStyle = white;
-            context.fillRect(x,700,60,76);
+            context.fillRect(x,790,60,76);
             context.fillStyle = 'blue';
             context.font = '30px Arial';
-            context.fillText(hand[i].value, x,750);
+            context.fillText(hand[i].value,x,750);
             context.font = '15px Arial';
             context.fillText(hand[i].suit.substring(0,7),x,765);
             context.font = '30px Arial';
@@ -457,19 +479,19 @@ function paintHand ()
     for (let i=0; i<melds.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 310 + (i * 70);
+        let x = 410 + (i * 70);
 
         /** show tile images or plain */
         if (useTileImages)
         {
             // select, paint tile image
             let tile = tiles[melds[i].value + ' ' + melds[i].suit];
-            context.drawImage(tile,x,575,60,76);
+            context.drawImage(tile,x,665,60,76);
         }
         else
         {
             context.fillStyle = white;
-            context.fillRect(x,575,60,76);
+            context.fillRect(x,665,60,76);
             context.fillStyle = 'blue';
             context.font = '30px Arial';
             context.fillText(melds[i].value,x,625);
@@ -479,8 +501,8 @@ function paintHand ()
         }
     }
 
-    /** paint hold */
-    for (let i=0; i<hold.length; ++i)
+    /** paint hold to the right of melds */
+    for (let i=1; i<hold.length; ++i)
     {
         // @NOTE tile size 60x76
         let x = 310 + ((i + melds.length) * 70);
@@ -490,12 +512,12 @@ function paintHand ()
         {
             // select, paint tile image
             let tile = tiles[hold[i].value + ' ' + hold[i].suit];
-            context.drawImage(tile,x,575,60,76);
+            context.drawImage(tile,x,665,60,76);
         }
         else
         {
             context.fillStyle = white;
-            context.fillRect(x,575,60,76);
+            context.fillRect(x,665,60,76);
             context.fillStyle = 'blue';
             context.font = '30px Arial';
             context.fillText(hold[i].value,x,625);
@@ -503,6 +525,51 @@ function paintHand ()
             context.fillText(hold[i].suit.substring(0,7),x,640);
             context.font = '30px Arial';
         }
+    }
+
+    /** @TODO paint melds of other users? */
+    context.fillRect(1401,100,198,540);
+    context.strokeRect(1401,100,198,540);
+
+    let arr = game.players[(user.seat+1)%4].melds;
+    for (let i=0; i<arr.length; ++i)
+    {
+        // @NOTE tile size 60x76
+        let x = 1405 + (Math.floor(i%3) * 65);
+        let y = 105 + (Math.floor(i/3) * 82);
+
+        // select, paint tile image
+        let tile = tiles[arr[i].value + ' ' + arr[i].suit];
+        context.drawImage(tile,x,y,60,76);
+    }
+
+    context.fillRect(250,1,1030,88);
+    context.strokeRect(250,1,1030,88);
+
+    arr = game.players[(user.seat+2)%4].melds;
+    for (let i=0; i<arr.length; ++i)
+    {
+        // @NOTE tile size 60x76
+        let x = 255 + (i * 65);
+
+        // select, paint tile image
+        let tile = tiles[arr[i].value + ' ' + arr[i].suit];
+        context.drawImage(tile,x,5,60,76);
+    }
+
+    context.fillRect(1,100,198,550);
+    context.strokeRect(1,100,198,550);
+
+    arr = game.players[(user.seat+3)%4].melds;
+    for (let i=0; i<arr.length; ++i)
+    {
+        // @NOTE tile size 60x76
+        let x = 5 + (Math.floor(i%3) * 65);
+        let y = 105 + (Math.floor(i/3) * 82);
+
+        // select, paint tile image
+        let tile = tiles[arr[i].value + ' ' + arr[i].suit];
+        context.drawImage(tile,x,y,60,76);
     }
 }
 
@@ -515,14 +582,21 @@ function paintHand ()
  */
 function paintHandType (y)
 {
+    if (claim != '') return; /** do nothing during active claim */
+
     if (y == -1) {} // maintain handType for calls from paintGame() 
-    else if (between(y,715,755))
+    else if (between(y,760,800))
     {
         handType = 'standard';
     }
-    else if (between(y,760,800))
+    else if (between(y,805,845))
     {
         handType = '7 pairs';
+    }
+    else if (between(y,850,890))
+    {
+        /** eyes */
+        eyesFirst = !eyesFirst;
     }
     else
         return; // not in expected y range, stop
@@ -531,47 +605,51 @@ function paintHandType (y)
     switch (handType)
     {
         case 'standard':
-            y=745;
+            y=790;
             break;
         case '7 pairs':
-            y=790;
+            y=835;
             break;
     }
 
     // clear space
     context.fillStyle = 'black';
     context.font = '20px Arial';
-    context.clearRect(1305,680,120,35);
-    context.fillText('hand type',1305,705);
+    context.clearRect(1445,730,120,30);
+    context.fillText('hand type',1450,755);
 
     /** draw hand types */
     context.font = '30px Arial';
     context.fillStyle = white;
-    context.fillRect(1310,715,120,40);
-    context.fillRect(1310,760,120,40);
+    context.fillRect(1450,760,120,40);
+    context.fillRect(1450,805,120,40);
+    context.fillRect(1450,850,120,40);
 
     /** reset choices */
     context.fillStyle = 'black';
-    context.fillText('standard',1310,745);
+    context.fillText('standard',1450,790);
+    context.fillText((eyesFirst ? 'eyes first' : 'eyes last'),1450,880);
 
-    // with insufficient tiles in your hand you can't possibly be 7 pairs
+    /** with insufficient tiles in hand you can't have 7 pairs */
     if (hand.length < 13)
     {
         handType = 'standard';
-        y=745;
+        y=790;
         context.fillStyle = 'gray';
     }
-    context.fillText('7 pairs',1310,790);
+    context.fillText('7 pairs',1450,835);
+
+
 
     /** mark new hand type */
     context.fillStyle = 'red';
-    context.fillText(handType,1310,y);
+    context.fillText(handType,1450,y);
 }
 
 
 /**
  * @function paintGroups
- * valid groupings have lightgreen underline
+ * valid groups have lightgreen underline
  * otherwise red
  * 
  * runs every second from paintGame()
@@ -579,133 +657,182 @@ function paintHandType (y)
 function paintGroups ()
 {
     // do nothing with empty hand or if swapping tiles
-    if (!hand.length || dragging) return;
+    if (!hand.length || dragging || claim != '') return;
 
-    // j, x for placing indicators
-    let j, x;
+    // j, x, w for placing indicators
+    let j, w;
+    let x = 220;
 
-    // clear grouping indicators
+    // clear group indicators
     context.fillStyle = darkenColor;
-    context.fillRect(110,785,1180,10);
+    context.fillRect(210,875,1180,10);
 
-    // set `groupings`
-    determineGroupings();
+    // set `groups`
+    determineGroups();
 
-    /** paint triple indicators */
-    for (let i=0; i<triples; ++i)
+    // paint any and all indicators
+    for (let i=0; i<groups.length; ++i)
     {
-        // `x` coordinate of grouping indicators (red, lightgreen)
-        x = 120 + (i*210);
+        context.fillStyle = (groups[i][1] == true) ? 'lightgreen' : 'red';
 
-        context.fillStyle = (groupings[i] == true) ? 'lightgreen' : 'red';
-        context.fillRect(x,785,180,10);
-    }
+        // eyes cover less tiles
+        if (groups[i][0] == 2)
+            w = 110;
+        else
+            w = 180;
 
-    /** paint eye indicator(s) */
-    for (let i=0; i<eyes; ++i)
-    {
-        // `j` index of first tile of eyes (3, 5, 7, ...)
-        j = triples*3 + 2*i;
-        // `x` coordinate of grouping indicators (red, lightgreen)
-        x = 120 + (j*70);
+        context.fillRect(x,875,w,10);
 
-        context.fillStyle = (groupings[i+triples] == true) ? 'lightgreen' : 'red';
-        context.fillRect(x,785,110,10);
-    }
-
-    // if all groups valid, win the game
-    // @TODO NOTE this should only be the case if its our (discarding) turn
-    if (total == eyes + triples && game.turnCount == user.seat)
-    {
-        updateSession('win', user.seat);
+        // adjust subsequent groups
+        if (groups[i][0] == 2)
+            x += 140;
+        else
+            x += 210;
     }
 }
 
 /**
- * just do it
+ * derive groups from tiles in hand
  * called from paintGroups() or from eat()
  */
-function determineGroupings()
+function determineGroups()
 {
+    /** based on current hand type derive number of triples & eyes */
     switch (handType)
     {
-        // 1 pair of eyes
         case 'standard':
             triples = Math.floor(hand.length/3);
             eyes = 1;
             break;
-        // guess how many
+
         case '7 pairs':
-            triples = 1;
-            eyes = Math.floor(hand.length/2)-1;
+            // may not have triple depending on hand length
+            if (hand.length < 15)
+            {
+                triples = 0;
+                eyes = Math.ceil(hand.length/2);
+            }
+            else
+            {
+                triples = 1;
+                eyes = Math.floor(hand.length/2)-1;
+            }
             break;
     }
     total = 0;
 
-    groupings = [];
+    /** reset/repaint groups */
+    groups = [];
 
-    // triple groupings
+    // group tiles by eyes or triples first
+    if (eyesFirst)
+    {
+        checkEyes(0);
+        checkTriples(eyes*2);
+    }
+    else
+    {
+        checkTriples(0);
+        checkEyes(triples*3);
+    }
+
+
+    // waiting?
+    context.clearRect(5,850,190,50);
+    if (total == groups.length - 1)
+    {
+        context.fillStyle = 'orange';
+        context.fillText('waiting!',40,890);
+    }
+    // WINNER
+    else if (total == groups.length)
+    {
+        console.log(total + groups.length);
+        updateSession('win', 0);
+    }
+}
+
+
+function checkTriples (k)
+{
+    // if this is being checked second, adjust groupings index
+    let l = (k ? eyes : 0);
+
     for (let i=0; i<triples; ++i)
     {
         // `j` index of first tile of triple (0, 3, 6, ...)
-        j = i*3;
+        j = k + i*3;
+        // assume grouping is invalid at first
+        groups[l+i] = [3, false];
 
-        // read tile values, suits in `hand`
-        let values = [
-            hand[j].value, hand[j+1].value, hand[j+2].value,
-        ];
-        // sort `values` in increasing order
-        values.sort((a,b) => a-b);
-
-        let suit0 = hand[j].suit;
-        let suit1 = hand[j+1].suit;
-        let suit2 = hand[j+2].suit;
-
-        /**
-         * conditions for valid triple:
-         * 
-         * 1: tiles must match NON-FLOWER suit
-         * 2a: if suit is winds or dragons: must be exact value match (2,2,2)
-         * 2b: else: can be exact value match (2,2,2) OR subsequent run (1,2,3)
-         */
-        groupings[i] = false;
-        if ((suit0 == suit1 && suit0 == suit2 && suit0 != 'flowers')) // 1
+        if (j+2 < hand.length)
         {
-            if (suit0 == 'winds' || suit0 == 'dragons') // 2a
+            // read tile values, suits in `hand`
+            let values = [
+                hand[j].value, hand[j+1].value, hand[j+2].value,
+            ];
+            // sort `values` in increasing order
+            values.sort((a,b) => a-b);
+
+            let suit0 = hand[j].suit;
+            let suit1 = hand[j+1].suit;
+            let suit2 = hand[j+2].suit;
+
+            /**
+             * conditions for valid triple:
+             * 
+             * 1: tiles must match NON-FLOWER suit
+             * 2a: if suit is winds or dragons: must be exact value match (2,2,2)
+             * 2b: else: can be exact value match (2,2,2) OR subsequent run (1,2,3)
+             */
+            if ((suit0 == suit1 && suit0 == suit2 && suit0 != 'flowers')) // 1
             {
-                if (values[0] == values[1] && values[0] == values[2])
+                if (suit0 == 'winds' || suit0 == 'dragons') // 2a
                 {
-                    groupings[i] = true;
-                    ++total;
+                    if (values[0] == values[1] && values[0] == values[2])
+                    {
+                        groups[l+i] = [3, true];
+                        ++total;
+                    }
                 }
-            }
-            else // 2b
-            {
-                if ((values[0] == values[1] && values[0] == values[2])
-                    || (values[1]-values[0] == 1 && values[2]-values[1] == 1))
+                else // 2b
                 {
-                    groupings[i] = true;
-                    ++total;
+                    if ((values[0] == values[1] && values[0] == values[2])
+                        || (values[1]-values[0] == 1 && values[2]-values[1] == 1))
+                    {
+                        groups[l+i] = [3, true];
+                        ++total;
+                    }
                 }
             }
         }
     }
+}
 
-    // eye groupings
+function checkEyes (k)
+{
+    // if this is being checked second, adjust groupings index
+    let l = (k ? triples : 0);
+
     for (let i=0; i<eyes; ++i)
     {
         // `j` index of first tile of eyes (3, 5, 7, ...)
-        j = triples*3 + 2*i;
+        j = k + i*2;
 
-        /**
-         * determine if eyes valid (exact tile match)
-         * NOTE: stringify the tile object to compare properties rather than references
-         */
-        groupings[i+triples] = false;
-        if (JSON.stringify(hand[j]) == JSON.stringify(hand[j+1]))
+        groups[l+i] = [2, false];
+
+        if (j+1 < hand.length)
         {
-            groupings[i+triples] = true;
-            ++total;
+            /**
+             * determine if eyes valid (exact tile match)
+             * CANNOT BE FLOWERS
+             * NOTE: stringify tile object to compare properties rather than references
+             */
+            if (JSON.stringify(hand[j]) == JSON.stringify(hand[j+1]) && hand[j].suit != 'flowers')
+            {
+                groups[l+i] = [2, true];
+                ++total;
+            }
         }
     }
 }
@@ -756,7 +883,7 @@ function handleMousemove (e)
         context.fillStyle = discardColor;
         context.fillRect(520,530,400,10);
         context.fillStyle = darkenColor;
-        context.fillRect(105,680,1150,20);
+        context.fillRect(205,770,1190,10);
 
         /**
          * mouse hovering over discard pile
@@ -775,7 +902,7 @@ function handleMousemove (e)
         else
         {
             /* tile to swap on mouseup */
-            indexToPlace = Math.floor((e.offsetX - 110)/70);
+            indexToPlace = Math.floor((e.offsetX - 210)/70);
 
             // stay in bounds of user's hand
             if (indexToPlace < 0) indexToPlace = 0;
@@ -783,7 +910,7 @@ function handleMousemove (e)
 
             // yellow indicator on indexToPlace
             context.fillStyle = 'yellow';
-            context.fillRect(105+(70*indexToPlace),680,5,20);
+            context.fillRect(220+(70*indexToPlace),770,40,10);
         }
     }
     // console.log(e);
@@ -802,95 +929,123 @@ function handleMousedown (e)
     /** do nothing if still in lobby */
     if (game.status == 'waiting') return;
 
-    /** select tile to drag */
-    if (between(e.offsetY, 690, 766) && between(e.offsetX, 110, 110+hand.length*70))
+    // behavior if currently trying to claim
+    if (claim != '')
     {
-        // set tileSelected
-        tileSelected = Math.floor((e.offsetX - 110)/70);
-
-        /**
-         * if suit is flower
-         * tile: hand -> melds, exit function
-         */
-        if (hand[tileSelected].suit == 'flowers')
-        { 
-            // take from hand
-            let [tileToPlace] = hand.splice(tileSelected, 1);
-            // add to melds
-            melds.push(tileToPlace);
-            // update game state
-            updateSession('place', tileSelected);
-
-            paintHand();
-            paintGroups();
-            return;
-        }
-
         // @TODO CHOW, PUNG
-        // check for tiles in temp array
-        // TODO IF THE CLAIM IS FILED THEN WE WANT TO NOT DO SOMETHING HERE
-        if (claim != '')
+        if (between(e.offsetY,790,866) && between(e.offsetX,210,210+hand.length*70))
         {
-            // push to the eating array, then do the fucntion
-            // eating.push(tileSelected);
+            // set tileSelected
+            tileSelected = Math.floor((e.offsetX - 210)/70);
             eat(tileSelected);
-            return;
         }
-
-        // sanity: indexToPlace is the same tile
-        // so if immediate mouseup, no tile swap
-        indexToPlace = tileSelected;
-
-        // yellow indicator on `indexToPlace`
-        context.fillStyle = "yellow";
-        context.fillRect(105+(70*indexToPlace),680,5,20);
-
-        // gray out `tileSelected`
-        context.fillStyle = "gray";
-        context.fillRect(110+(tileSelected*70),700,60,76);
-
-        // set global variable
-        dragging = true;
+        // cancel button
+        else if (between(e.offsetX,5,105) && between(e.offsetY,740,780))
+        {
+            // undo sent claims
+            if (claimSent)
+            {
+                updateSession('cancel', 'cancel');
+                claimSent = false;
+                eating = [];
+            }
+            claim = '';
+            
+            // TODO clear the AREA
+            context.clearRect(5,700,190,200);
+        }
     }
-    // 2: changing hand type
-    else if (between(e.offsetX, 1310, 1430))
+    else // no claim -> regular mousedown behavior
     {
-        paintHandType(e.offsetY);
-        paintGroups();
-    }
-    // 3: chow/pung/kong
-    else if (between(e.offsetY,485,525))
-    {
-        if (user.canChow && between(e.offsetX,210,295))
+        /** select tile to drag */
+        if (between(e.offsetY,790,866) && between(e.offsetX,210,210+hand.length*70))
         {
-            claim = 'chow';
-            eat(-1);
-        }
-        else if (user.canPung && between(e.offsetX,305,390))
-        {
-            claim = 'pung';
-            eat(-1);
-        }
-        else if (user.canKong && between(e.offsetX,400,485))
-        {
-            // claim kong from here
-            claim = 'kong';
+            // set tileSelected
+            tileSelected = Math.floor((e.offsetX - 210)/70);
 
-            let message = ['kong'];
-            let dTile = JSON.stringify(discardPile[0]);
+            /**
+             * suit: flower?
+             * tile: hand index tSelected -> melds, exit
+             */
+            if (hand[tileSelected].suit == 'flowers')
+            { 
+                melds.push( hand.splice(tileSelected,1)[0] );
+                // update game state
+                updateSession('place', tileSelected);
 
-            // iterate through hand and get indexes of all (3) exact matches
-            hand.forEach((tile, i) => {
-                if (dTile == JSON.stringify(tile))
-                    message.push(i);
-            });
+                paintHand();
+                paintGroups();
+                return;
+            }
 
-            updateSession('eat', message);
+            // sanity: indexToPlace is the same tile
+            // so if immediate mouseup, no tile swap
+            indexToPlace = tileSelected;
+
+            // yellow indicator on `indexToPlace`
+            context.fillStyle = 'yellow';
+            context.fillRect(220+(70*indexToPlace),770,40,10);
+
+            // gray out `tileSelected`
+            context.fillStyle = 'gray';
+            context.fillRect(210+(tileSelected*70),790,60,76);
+
+            // set global variable
+            dragging = true;
         }
-        else if (user.canChow || user.canPung && total == (triples+eyes-1))
+        // 2: changing hand type
+        else if (between(e.offsetX, 1450, 1570))
         {
-            claim = 'win';
-            eat(-1);
+            paintHandType(e.offsetY);
+            paintGroups();
+        }
+        // 3: start claim: chow/pung/kong/win
+        else if (between(e.offsetY,485,525))
+        {
+            if (canChow && between(e.offsetX,290,375))
+            {
+                claim = 'chow';
+                eat(-1);
+            }
+            else if (canPung && between(e.offsetX,385,470))
+            {
+                claim = 'pung';
+                eat(-1);
+            }
+            else if (canKong && between(e.offsetX,480,565))
+            {
+                // send claim from here
+                claim = 'kong';
+
+                let eating = [];
+                let dTile = JSON.stringify(discardPile[0]);
+
+                // iterate through hand
+                // index of all (3) exact matches
+                // tiles (3): hand -> message
+                hand.forEach((tile, i) => {
+                    if (dTile == JSON.stringify(tile))
+                        eating.push(i);
+                });
+
+                // reverse sort
+                eating.sort((a,b) => b - a);
+
+                // @TODO instead lets keep in hand
+                // and paint lightgreen over the tiles
+                // tiles (3): hand -> hold
+                for (let i=0; i<3; ++i)
+                {
+                }
+
+                updateSession('kong', eating);
+                claimSent = true;
+            }
+            else if (canWin && between(e.offsetX,575,660))
+            {
+                claim = 'win';
+                eat(-2);
+            }
         }
     }
     // console.log(e);
@@ -899,129 +1054,158 @@ function handleMousedown (e)
 // by the end we want to update session
 function eat (i)
 {
-    // different behavior depending on passed `i`ndex
+    // @TODO
+    if (claimSent) return;
+    context.font = '20px Arial';
+
+    // start claims with -2, -1
     switch (i)
     {
-        // claim start
-        case -1:
-            context.font = '14px Arial';
-            context.fillStyle = 'black';
-            context.clearRect(5,540,150,30);
-            // context.fillRect(5,540,150,30);
-            context.fillText(claim + ': select 2 tiles',5,560);
-            context.font = '30px Arial';
-            break;
-
-        default:
-            switch (eating.length)
+        // win claims (-2) execute instantly
+        case -2:
+            // fill eye
+            if (groups[groups.length-1][0] == 2)
             {
-                // avoid player clicking the same tile twice
-                case 1:
-                    if (eating[0] == i)
-                        return;
-
-                // 1 or 0 tiles
-                default:
-                    // paint green eat indicator
-                    let x = 130 * (i + 70);
-                    context.fillStyle = 'lightgreen';
-                    context.fillRect(x,680,20,10);
-
-                    eating.push(i);
-                    break;
+                if (JSON.stringify(hand[hand.length-1]) == JSON.stringify(discardPile[0]))
+                {
+                    /** update.php: claim win with last tile */
+                    updateSession('cWin', 1);
+                }
+                else
+                {
+                    context.font = '20px Arial';
+                    context.fillStyle = 'black';
+                    context.clearRect(5,700,190,200);
+                    context.fillText(claim + ' failed: invalid',5,730);
+                }
             }
-            break;
-    } 
+            else // fill triple
+            {
+                // read tile values, suits in `hand`
+                let values = [
+                    discardPile[0].value,
+                    hand[hand.length-1].value,
+                    hand[hand.length-2].value
+                ];
+                // sort `values` in increasing order
+                values.sort((a,b) => a-b);
+
+                let suit0 = discardPile[0].suit;
+                let suit1 = hand[hand.length-1].suit;
+                let suit2 = hand[hand.length-2].suit;
+
+                t0 = JSON.stringify(discardPile[0]);
+                t1 = JSON.stringify(hand[eating[0]]);
+                t2 = JSON.stringify(hand[eating[1]]);
+
+                // CHOW OR PUNG
+                if ((suit0 == suit1 && suit1 == suit2 &&
+                    values[1]-values[0] == 1 && values[2]-values[1] == 1)
+                    || t0 == t1 && t1 == t2)
+                {
+                    /** update.php: claim win with last 2 tiles */
+                    updateSession('cWin', 2);
+                }
+                else
+                {
+                    context.font = '20px Arial';
+                    context.fillStyle = 'black';
+                    context.clearRect(0,700,190,200);
+                    context.fillText(claim + ' failed: invalid',5,730);
+                }
+            }
+            return;
+
+
+        // claim start: paint interface, return
+        case -1:
+            context.font = '20px Arial';
+            context.fillStyle = 'black';
+            context.clearRect(0,700,190,200);
+            context.fillText(claim + ': select 2 tile(s)',5,730);
+
+            context.font = '30px Arial';
+            context.fillStyle = 'white';
+            context.fillRect(5,740,100,40);
+            context.fillStyle = 'black';
+            context.fillText('cancel',10,770);
+            return;
+    }
+
+    // AT THIS POINT WE HAVE SELECTED A TILE
+    // avoid flowers, chowing with dragons/winds, eating same tile(index)
+    if (hand[i].suit == 'flowers'
+        || ((hand[i].suit == 'winds' || hand[i].suit == 'dragons') && claim == 'chow')
+        || (eating.length == 1 && i == eating[0]))
+        return;
+
+    // push it
+    eating.push(i);
+
+    // paint green eat indicator
+    let x = 220 + (i * 70);
+    context.fillStyle = 'lightgreen';
+    context.fillRect(x,770,40,10);
 
     // 2 tiles in `eating`: check claim validity
     if (eating.length == 2)
     {
-        done = false;
+        let valid = false;
+        // reverse sort indices for hand splice
+        eating.sort((a,b) => b - a);
 
-        if (claim == 'chow' || claim == 'win')
+        console.log('checking validity now' + JSON.stringify(eating));
+
+        // @TODO CAN'T DO WINDS OR DRAGONS??
+        if (claim == 'chow')
         {
             // read tile values, suits in `hand`
             let values = [
-                discardPile[0].value, hand[eating[0]].value, hand[eating[1]].value
+                discardPile[0].value,
+                hand[eating[0]].value,
+                hand[eating[1]].value
             ];
             // sort `values` in increasing order
             values.sort((a,b) => a-b);
 
-            let suits = [
-                discardPile[0].suit, hand[eating[0]].suit, hand[eating[1]].suit
-            ];
-            // if valid, chow
-            if (suits[0] == suits[1] && suits[1] == suits[2] &&
-                values[1]-values[0] == 1 && values[2]-values[1] == 1
-            )
-            {
-                // 2 indexes from hand -> hold
-                hold.push(hand.splice(eating[0], 1)[0]);
-                hold.push(hand.splice(eating[1], 1)[0]);
+            let suit0 = discardPile[0].suit;
+            let suit1 = hand[eating[0]].suit;
+            let suit2 = hand[eating[1]].suit;
 
-                if (claim == 'chow')
-                {
-                    updateSession('eat', ['chow', eating[0], eating[1]])
-                    done = true;
-                }
-                else
-                {
-                    // win claim
-                    determineGroupings();
-                    if (total == triples + eyes)
-                    {
-                        updateSession('eat', ['win', eating[0], eating[1]]);
-                    }
-                    else
-                    {
-                        // @TODO undo pushes on basis of failure
-                        hand.push(hold.splice(0,1)[0]);
-                        hand.push(hold.splice(0,1)[0]);
-                    }
-                }
-            }
+            // suits match + 3 straight: chow
+            valid = (suit0 == suit1 && suit1 == suit2 && values[1]-values[0] == 1 && values[2]-values[1] == 1);
         } 
-        
-        if (!done && claim == 'pung' || claim == 'win')
+        else if (claim == 'pung')
         {
             t0 = JSON.stringify(discardPile[0]);
-            t1 = JSON.stringify(eating[0]);
-            t2 = JSON.stringify(eating[1]);
+            t1 = JSON.stringify(hand[eating[0]]);
+            t2 = JSON.stringify(hand[eating[1]]);
 
-            if (t0 == t1 && t1 == t2)
-            {
-                // 2 indexes from hand -> hold
-                hold.push(hand.splice(eating[0], 1)[0]);
-                hold.push(hand.splice(eating[1], 1)[0]);
-
-                if (claim == 'pung')
-                {
-                    updateSession('eat', [claim, eating[0], eating[1]])
-                    done = true;
-                }
-                else
-                {
-                    // win claim
-                    determineGroupings();
-                    if (total == triples + eyes)
-                    {
-                        updateSession('eat', ['win', eating[0], eating[1]]);
-                    }
-                    else
-                    {
-                        // undo pushes on basis of failure
-                        hand.push(hold.splice(0,1)[0]);
-                        hand.push(hold.splice(0,1)[0]);
-                    }
-                }
-            }
+            // valid if three tile exact match
+            valid = (t0 == t1 && t1 == t2);
         }
 
+        // based on validity
+        context.clearRect(0,700,190,40);
+        if (valid)
+        {
+            context.fillText(claim + ' sent!',5,730);
+            updateSession(claim, [eating[0], eating[1]])
+            claimSent = true;
+        }
+        else
+        {
+            context.fillText(claim + ' failed: invalid',5,730);
+            // clear cancel button
+            context.clearRect(5,740,100,40);
+            claim = '';
+        }
 
-        // i guess by here eating is already [];
-        claim = '';
+        // empty `eating`
+        eating = [];
     }
 }
+
 
 /**
  * @EventListener handleMouseup
@@ -1037,28 +1221,17 @@ async function handleMouseup (e)
     context.fillStyle = discardColor;
     context.fillRect(520,530,400,10);
     context.fillStyle = darkenColor;
-    context.fillRect(105,680,1150,20);
+    context.fillRect(205,770,1190,10);
 
     if (dragging)
     {
         /** @TODO user can discard if its their turn */
-        if (user.seat == game.turnCount && game.status == "discarding" && between(e.offsetY,200,500))
+        if (user.seat == game.turnCount && game.status == 'discarding' && between(e.offsetY,200,550))
         {
             // discarded tile: hand -> discardPile
             // array destructuring to extract tile from array
             let [tileDiscarded] = hand.splice(tileSelected, 1);
-
-            // debug information
-            if (debug)
-            {
-                context.fillStyle = "red";
-                context.fillRect(0,100,350,50);
-                context.fillStyle = "black";
-
-                context.font = "14px Arial";
-                let text = tileDiscarded.value + tileDiscarded.suit[0];
-                context.fillText("player discarded tile: " + text,10,130);
-            }
+            // console.log(tileDiscarded.value + tileDiscarded.suit[0]);
 
             // changes to the discard pile come with session update
             updateSession('discard', tileSelected);
@@ -1102,7 +1275,7 @@ async function updateSession (action, message)
         });
 
         if (!response.ok)
-            console.error("update.php response was not ok: ", response.statusText);
+            console.error('update.php response was not ok: ', response.statusText);
 
         res = await response.json();
 
@@ -1111,7 +1284,7 @@ async function updateSession (action, message)
     }
     catch (error)
     {
-        console.error("update.php fetch error: ", error);
+        console.error('update.php fetch error: ', error);
     }
 }
 
@@ -1128,7 +1301,7 @@ async function gameLoop ()
         let response = await fetch('backend/loop.php');
 
         if (!response.ok)
-            console.error("loop.php response was not ok: ", response.statusText);
+            console.error('loop.php response was not ok: ', response.statusText);
 
         data = await response.json();
 
@@ -1150,10 +1323,19 @@ async function gameLoop ()
             melds = user.melds;
             hold = user.hold;
             discardPile = game.discardPile;
+            // eating booleans
             canChow = user.canChow;
             canPung = user.canPung;
             canKong = user.canKong;
-            // TODO game logic for determining whether we are allowed to eat
+
+            // clearing claim stuff
+            if (game.status != 'discarded')
+            {
+                context.clearRect(5,700,190,200);
+                claim = '';
+                claimSent = false;
+            }
+
 
             // check
             game.status == 'waiting' ? paintLobby() : paintPlayers();

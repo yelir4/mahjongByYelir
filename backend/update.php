@@ -130,33 +130,56 @@ switch ($input['action'])
         break;
     
     // @TODO request, not immediate
-    // idea: tiles: hand index i , hand index j -> hold index 1, 2
-    // input message -> hold index 0
+    // idea: tiles: hand indices (message) -> hold
+    // input action -> hold index 0
+    // later in loop.php, if player discard goes through,
+    // tiles: hold -> melds, along with discarded tile
+    case 'chow':
+    case 'kong':
+    case 'pung':
+        $hold = []; # reset hold
 
-    // later in loop.php, if player discard goes through, -> melds along with the discarded tile
-    // else, index 1, 2 -> hand
-    case 'eat':
-        $type = $input['message'][0];
-        $i = $input['message'][1];
-        $j = $input['message'][2];
+        // hold index 0: claim type
+        $hold[] = $input['action'];
 
-        $hold[] = array_splice($hand, $type, 1)[0];
-        $hold[] = array_splice($hand, $i, 1)[0];
-        $hold[] = array_splice($hand, $j, 1)[0];
+        // NOTE `message` should be reverse sorted from index.js
+
+        // for-loop based on # of tiles in message
+        // fill eye: 1
+        // chow/pung/win: 2
+        // kong: 3
+        for ($i=0; $i<count($input['message']); ++$i)
+        {
+            $hold[] = array_splice($hand, $input['message'][$i], 1)[0];
+        }
+        break;
+    
+    // win claims handle different
+    case 'cWin':
+        $hold = []; # reset hold
+
+        // hold index 0: claim type
+        $hold[] = $input['action'];
+
+        // for win claims, `n` is integer
+        $n = $input['message'];
+
+        // tiles: last `n` in hand -> hold
+        for ($i=0; $i<$n; ++$i)
+        {
+            $hold[] = array_pop($hand);
+        }
+
         break;
     
     // @TODO cancel functionality
     case 'cancel':
-        // echo json_encode(['success' => false, 'message' => $message . '`cancel` not implemented']);
-        // exit();
-
-        // if there is hold to cancel?
-
-        // tiles: hold index 1,2 -> hand
-        $hand[] = array_splice($hold,1,1)[0];
+        // tiles: hold index 2,1 -> hand
         $hand[] = array_splice($hold,2,1)[0];
-        break;
+        $hand[] = array_splice($hold,1,1)[0];
 
+        $hold = []; # remove claim type
+        break;
 
     case 'win':
         // @TODO NOTE in order to win, it must be player's (our) turn
@@ -196,12 +219,10 @@ $stmt->execute([
     json_encode($hand),
     json_encode($melds),
     json_encode($hold),
-    $_SESSION['game']['gameID'],
     $_SESSION['user']['name']
 ]);
 
 // sessions update through loop.php
-
 // return success message
 echo json_encode(['success' => true, 'message' => $message . '`' . $input['action'] . '` success']);
 

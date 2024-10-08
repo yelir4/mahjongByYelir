@@ -49,7 +49,7 @@ if (!isset($_SESSION['game']))
 // retrieve game
 $sql = "
     SELECT G.GameID, GameDeck, GameDiscardPile,
-        GameNumberPlayers, GameTurnCount, GameSeconds, GameStatus
+        GameNumberPlayers, GameTurnCount, GameSeconds, GameStatus,
         GROUP_CONCAT(CONCAT(PlayerName, '|', PlayerHand, '|', PlayerMelds, '|', PlayerHold, '|', PlayerSeat) SEPARATOR '||') Players
     FROM Game_T G
     INNER JOIN Player_T P
@@ -94,7 +94,6 @@ foreach ($players as $i => $player)
 $_SESSION['user']['canChow'] = false;
 $_SESSION['user']['canPung'] = false;
 $_SESSION['user']['canKong'] = false;
-// $_SESSION['user']['canWin'] = false;
 
 /**
  * account for possible game states every second
@@ -152,7 +151,7 @@ switch ($game['GameStatus'])
             // start timer
             if ($game['GameSeconds'] == -1)
             {
-                $game['GameSeconds'] = 30;
+                $game['GameSeconds'] = 12;
             }
             // decrement timer
             else
@@ -160,26 +159,26 @@ switch ($game['GameStatus'])
                 // timer end: check holds and move turn
                 if ($game['GameSeconds'] == 0)
                 {
-                    // cEater is the player who currently has best precedence
-                    // `cPrec` the current lowest precedence number
+                    // player win: 1-3
+                    // kung/pong: 4-6
+                    // chow: 7
+
+                    // lowest precedence number wins
+                    // cEater is player with current lowest precedence
+                    // `cPrec` current low precedence number
                     $cEater = -1;
                     $cPrec = 8;
 
-                    // THREE TIMES: FOR EACH NON DISCARDER
+                    // iterate 3x: FOR EACH NON DISCARDER
                     for ($i=1; $i<4; ++$i)
                     {
                         // go counter clockwise from discarder
-                        $j = ($i + $_SESSION['game']['GameTurnCount']) % 4;
+                        $j = ($i + $game['GameTurnCount']) % 4;
 
-                        // no claim has: []
-                        // ignore users with no claim
-                // if player is claiming valid win, that takes precedence
-                // then any player calling kong
-                // then any player calling pung
-                // then the next player's chow
+                        // ignore users with no claim (tiles in hold)
                         if (count($holds[$j]))
                         {
-                            $prec = 8;
+                            // determine player's precedence
                             switch ($holds[$j][0])
                             {
                                 case 'win':
@@ -192,64 +191,74 @@ switch ($game['GameStatus'])
                                     $prec = $i+3;
                                     break;
                                 case 'chow':
-                                    // TODO right->7, thats all we want to consider
+                                    // Tight->7, only legal win claim
                                     $prec = $i+6;
                                     break;
                             }
 
-                            // if our precedence lower than current low,
-                            // then current eater is the loser
-                            // otherwise we are the loser
-                            $loser;
+                            // if player's prec lower than cPrec,
+                            // `cEater` loses
+                            // move loser's `hold` back to `hand`
                             if ($prec < $cPrec)
                             {
-                                $loser = $cEater;
+                                if ($cEater != -1)
+                                {
+                                    // first remove claim type
+                                    // tiles: hold index 1-2 -> hand
+                                    array_shift($holds[$cEater]);
+                                    array_push($hands[$cEater], ...array_splice($holds[$cEater],0,count($holds[$cEater])));
+                                }
 
                                 // update these
                                 $cEater = $j;
                                 $cPrec = $prec;
                             }
-                            else
+                            else // player loses
                             {
-                                $loser = $j;
-                            }
-
-                            // if there is valid loser, clear out holdings
-                            if ($loser != -1)
-                            {
-                                // tiles: hold index 2,1 -> hand
-                                $hands[$loser][] = array_splice($holds[$loser], 2, 1)[0];
-                                $hands[$loser][] = array_splice($holds[$loser], 1, 1)[0];
+                                array_shift($holds[$j]);
+                                array_push($hands[$j], ...array_splice($holds[$j],0,count($holds[$j])));
                             }
                         }
                     }
 
                     // case: no eating claims
                     // move turn to next player, drawing
-                    if ($cPrec == 8)
+                    if ($cEater == -1)
                     {
                         $game['GameTurnCount'] = ++$game['GameTurnCount'] % 4;
                         $game['GameStatus'] = 'drawing';
                     }
-                    else
+                    else // there is prevailing claim, hold -> melds
                     {
-                        switch ($cEater[$j][0])
+                        // going to need Player_T updates (changedG already set)
+                        $changedP = true;
+                        $changedAllP = true;
+
+                        // first discard tile -> meld
+                        $melds[$cEater][] = array_shift($discardPile);
+
+                        // extract `claim type`, dependent behavior
+                        switch (array_shift($holds[$cEater]))
                         {
-                            // wins finish the game
+                            // kong: 3 tiles, user draws
+                            case 'kong':
+                                $game['GameStatus'] = 'drawing';
+                                break;
+
+                            // pung/chow: 2 tiles, discard
                             case 'win':
                                 $game['GameStatus'] = 'finished';
                                 break;
 
-                            // kong takes a lot of tiles, so user needs another
-                            case 'kong':
-                                $game['GameStatus'] = 'drawing';
-
-                            // pung chow they just need to discard after eating
                             case 'pung':
                             case 'chow':
                                 $game['GameStatus'] = 'discarding';
                                 break;
                         }
+
+                        // hold -> melds
+                        array_push($melds[$cEater], ...$holds[$cEater]);
+                        $holds[$cEater] = [];
 
                         // update turn count
                         $game['GameTurnCount'] = $cEater;
@@ -267,12 +276,12 @@ switch ($game['GameStatus'])
             // discarded tile
             $tile = $discardPile[0];
 
-            // (chow) 3 sequential
+            // chow: 3 straight
             $hasLower = false;
             $has2Lower = false;
             $hasUpper = false;
             $has2Upper = false;
-            // exact matches
+            // pung/kong: exact matches
             $matchCount = 0;
 
             // compare with every tile in (our) hand
@@ -319,27 +328,18 @@ switch ($game['GameStatus'])
             // chow if three tile straight in hand (ex: 1, 2, 3)
             // NOTE dragons and winds don't have sequential series, cant chow
             // @TODO can only chow if in position or can win?
-            if ($tile['suit'] != 'dragons' &&
+            if ($game['GameTurnCount'] == (($seat-1)%4) &&
+                $tile['suit'] != 'dragons' &&
                 $tile['suit'] != 'winds' &&
-                $has2Lower && $hasLower ||
+                ($has2Lower && $hasLower ||
                 $hasLower && $hasUpper ||
-                $hasUpper && $has2Upper
+                $hasUpper && $has2Upper)
             )
             {
-                if ($game['GameTurnCount'] == $seat - 1)
-                {
-                    $_SESSION['user']['canChow'] = true;
-                }
-
+                $_SESSION['user']['canChow'] = true;
             }
 
-            // @TODO NOTE for now, user derives `canwin` in index.js
-            // check if user can go for win (x valid triple groupings?)
-            // if ($_SESSION['user']['canChow'] || $_SESSION['user']['canPung']
-            //     && $_SESSION['user']['hand'])
-            // {
-            
-            // }
+            // NOTE for now, user derives `canwin` in index.js
         }
         break;
 
@@ -363,8 +363,8 @@ switch ($game['GameStatus'])
         // go from there?
         // finished should mean no discarding follows
 
-        echo json_encode(['success' => false, 'message' => $message . '`finished` status not implemented']);
-        exit();
+        // echo json_encode(['success' => false, 'message' => $message . '`finished` status not implemented']);
+        // exit();
         break;
 }
 
@@ -384,16 +384,17 @@ if ($changedP)
     // initial tile draw or chow/pung/kong
     if ($changedAllP)
     {
-        $stmt->execute([ json_encode($hands[0]), json_encode($allMelds[0]), json_encode($holds[0]), $_SESSION['game']['players'][0]['name'] ]);
-        $stmt->execute([ json_encode($hands[1]), json_encode($allMelds[1]), json_encode($holds[1]), $_SESSION['game']['players'][1]['name'] ]);
-        $stmt->execute([ json_encode($hands[2]), json_encode($allMelds[2]), json_encode($holds[2]), $_SESSION['game']['players'][2]['name'] ]);
-        $stmt->execute([ json_encode($hands[3]), json_encode($allMelds[3]), json_encode($holds[3]), $_SESSION['game']['players'][3]['name'] ]);
+        $stmt->execute([ json_encode($hands[0]), json_encode($melds[0]), json_encode($holds[0]), $_SESSION['game']['players'][0]['name'] ]);
+        $stmt->execute([ json_encode($hands[1]), json_encode($melds[1]), json_encode($holds[1]), $_SESSION['game']['players'][1]['name'] ]);
+        $stmt->execute([ json_encode($hands[2]), json_encode($melds[2]), json_encode($holds[2]), $_SESSION['game']['players'][2]['name'] ]);
+        $stmt->execute([ json_encode($hands[3]), json_encode($melds[3]), json_encode($holds[3]), $_SESSION['game']['players'][3]['name'] ]);
     }
     else
     {
         $stmt->execute([
             json_encode($hands[$seat]),
-            $_SESSION['game']['gameID'],
+            json_encode($melds[$seat]),
+            json_encode($holds[$seat]),
             $_SESSION['user']['name']
         ]);
     }
@@ -404,12 +405,13 @@ if ($changedG || $changedP)
     // update Game_T's affected rows
     $sql = "
         UPDATE Game_T
-        SET GameDeck = ?, GameTurnCount = ?, GameSeconds = ?, GameStatus = ?
+        SET GameDeck = ?, GameDiscardPile = ?, GameTurnCount = ?, GameSeconds = ?, GameStatus = ?
         WHERE GameID = ?
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
         json_encode($deck),
+        json_encode($discardPile),
         $game['GameTurnCount'],
         $game['GameSeconds'],
         $game['GameStatus'],
@@ -424,7 +426,7 @@ $_SESSION['game'] = array_merge($_SESSION['game'], [
     'numberPlayers' => $game['GameNumberPlayers'],
     'turnCount' => $game['GameTurnCount'],
     'seconds' => $game['GameSeconds'],
-    'status' => $game['GameStatus'],
+    'status' => $game['GameStatus']
 ]);
 
 // updating session game players
@@ -433,8 +435,7 @@ foreach ($players as $i => $player)
     // merge to update hand, melds
     $_SESSION['game']['players'][$i] = array_merge($_SESSION['game']['players'][$i], [
         'handCount' => count($hands[$i]),
-        'melds' => $melds[$i],
-        'hold' => $holds[$i]
+        'melds' => $melds[$i]
     ]);
 }
 
@@ -442,7 +443,7 @@ foreach ($players as $i => $player)
 $_SESSION['user'] = array_merge($_SESSION['user'], [
     'hand' => $hands[$seat],
     'melds' => $melds[$seat],
-    'hold' => $holds[$i]
+    'hold' => $holds[$seat]
 ]);
  
 // JSON encoded response to `index.js`
