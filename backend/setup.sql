@@ -44,13 +44,6 @@ UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8}]' WHERE PlayerName 
 UPDATE game_t set gameturncount = 2 where gameid = 1;
 
 
-UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":8},{"suit":"dots","value":4},{"suit":"dots","value":6},{"suit":"dots","value":7}]' WHERE PlayerSeat = 0;
-UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":3},{"suit":"dots","value":5},{"suit":"dots","value":6}]' WHERE PlayerSeat = 1;
-UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":2},{"suit":"dots","value":4},{"suit":"dots","value":5}]' WHERE PlayerSeat = 2;
-UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":1},{"suit":"dots","value":3},{"suit":"dots","value":4}]' WHERE PlayerSeat = 3;
-UPDATE Game_T SET GameTurnCount = 0;
-
-
-
-UPDATE player_t
-set PlayerMelds = '[{"suit":"flowers","value":1,"color":"blue"},{"suit":"flowers","value":1,"color":"blue"},{"suit":"flowers","value":1,"color":"blue"},{"suit":"flowers","value":1,"color":"blue"},{"suit":"flowers","value":1,"color":"blue"}]'
+UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":8},{"suit":"dots","value":6},{"suit":"dots","value":7}]', PlayerMelds = '[]';
+UPDATE Player_T SET PlayerHand = '[{"suit":"dots","value":8},{"suit":"dots","value":8},{"suit":"dots","value":5},{"suit":"dots","value":6},{"suit":"dots","value":7}]', PlayerMelds = '[]' where playerseat=0;
+UPDATE Game_T SET GameTurnCount = 0, GameStatus = 'discarding';

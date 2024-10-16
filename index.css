@@ -1,4 +1,4 @@
-/* html spans the whole viewport */
+/* html spans the viewport */
 html
 {
     /* background: red; */
@@ -7,13 +7,14 @@ html
     padding: 0;
 }
 
+/* clear all formatting from html elements */
 html *
 {
     margin: 0;
     padding: 0;
 }
 
-/* body covers all of html */
+/* body fills its parent */
 body
 {
     background: #363636;

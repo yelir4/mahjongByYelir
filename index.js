@@ -2,11 +2,11 @@ console.log('index.js loaded');
 
 /** global variables */
 let game, user;
-/** useful arrays */
+/** global arrays */
 let hand, melds, hold;
 let discardPile;
 
-/** useful booleans */
+/** global booleans */
 let canChow, canPung, canKong, canWin;
 
 /** debugging */
@@ -27,7 +27,7 @@ let tileSelected = -1;
 let indexToPlace = -1;
 let dragging = false;
 
-/** `eat` tiles */
+/** `claim` tiles */
 let claim = '';
 let claimSent = false;
 let eating = [];
@@ -62,7 +62,7 @@ async function start ()
     let username = document.getElementById('username').value;
     console.log('username selected: ' + username);
 
-    // fetch encoded form data
+    // fetch session data
     try
     {
         let response;
@@ -70,12 +70,12 @@ async function start ()
         // on page load: load session if available
         if (username == '')
         {
-            // POST request to game.php
             response = await fetch('backend/start.php');
         }
-        // entering a username
+        // on form submit: username
         else
         {
+            // POST request to start.php
             response = await fetch('backend/start.php', {
                 method: 'POST',
                 headers: {
@@ -102,7 +102,7 @@ async function start ()
             console.log(game);
             console.log(user);
 
-            // extract useful arrays
+            // extract to global arrays
             hand = user.hand;
             melds = user.melds;
             hold = user.hold;
@@ -119,12 +119,12 @@ async function start ()
             loginForm.appendChild(welcomeElt);
             debug ? loginForm.appendChild(debugElt) : null;
             loginForm.style.flexDirection = 'column';
-            /** now we can disable text selection */
+            /** disable text selection */
             loginForm.style.userSelect = 'none';
 
             /** display canvas */
             canvas.style.display = 'flex';
-            /** draw gameID */
+            /** paint gameID */
             context.font = '18px Arial';
             context.fillStyle = 'black';
             context.fillText('gameID: ' + game.gameID,1500,18);
@@ -143,7 +143,7 @@ async function start ()
         console.error('start failed: ' + error);
     }
 }
-// fetch data on page load
+// run on page load
 window.onload = start;
 
 
@@ -159,15 +159,17 @@ function between (val, lo, hi)
 
 
 /**
- * preload tiles ONCE after start.php successfully fetches game data
- * save into `tiles` array that holds all HTMLElements (images)
+ * @function preloadTiles
+ * 
+ * preload `tiles` images after start.php successfully fetches game data
+ * `tiles` array holds all HTMLElements (images)
  */
 function preloadTiles ()
 {
     // temp array of tile names
     let tileNames = ['1 bamboos', '2 bamboos', '3 bamboos', '4 bamboos', '5 bamboos', '6 bamboos', '7 bamboos', '8 bamboos', '9 bamboos', '1 dots', '2 dots', '3 dots', '4 dots', '5 dots', '6 dots', '7 dots', '8 dots', '9 dots', '1 characters', '2 characters', '3 characters', '4 characters', '5 characters', '6 characters', '7 characters', '8 characters', '9 characters', '1 flowers', '2 flowers', '3 flowers', '4 flowers', '5 flowers', '6 flowers', '7 flowers', '8 flowers', '0 winds', '1 winds', '2 winds', '3 winds', '0 dragons', '1 dragons', '2 dragons'];
 
-    // make image for each tile, insert into `tiles`
+    // create HTMLElement `image` for each tile, insert into `tiles`
     for (let tile of tileNames)
     {
         let img = new Image();
@@ -183,8 +185,8 @@ function preloadTiles ()
  * called: after start() success,
  * every second while game not full
  * 
- * while game waits for four players
- * what do we show: middle discard pile
+ * paint middle section (discard pile)
+ * player information, countdown if applicable
  */
 function paintLobby ()
 {
@@ -197,7 +199,7 @@ function paintLobby ()
     /** paint players info */
     for (player of game.players)
     {
-        // we are always on bottom, paint other players clockwise
+        // we are always on bottom, paint other players counter-clockwise
         let pos = (4 + player.seat - user.seat) % 4;
         let posx, posy;
         
@@ -228,11 +230,9 @@ function paintLobby ()
 
 /**
  * @function paintPlayers
- * paint players' information
  * 
- * NOTE this runs every second after start() success
- * (helps track how many tiles each player has)
- * @TODO we also need to update our hand every second? maybe
+ * paint players' information
+ * runs every second after game starts
  */
 function paintPlayers ()
 {
@@ -240,7 +240,7 @@ function paintPlayers ()
     /** paint players info */
     for (player of game.players)
     {
-        // we are always on the bottom, paint other players clockwise
+        // we are always on the bottom, paint other players counter-clockwise
         let pos = (4 + player.seat - user.seat) % 4;
         let posx, posy;
         
@@ -259,26 +259,33 @@ function paintPlayers ()
                 [posx, posy] = [0,10];
                 break;
         }
-        /** @TODO highlight game winner in green */
-        /** clear space for players */
+
+        /** clear space for players & highlight game winner in green */
         context.fillStyle = (player.seat == game.turnCount && game.status == 'finished') ? 'lightgreen' : white;
         context.fillRect(posx, posy,200,90);
 
-        /** different color for the player whose turn it is */
+        /** orange text for the player whose turn it is */
         context.fillStyle = (player.seat == game.turnCount && game.status != 'finished') ? 'orange' : 'blue';
-        /** paint players */
+
+        /** paint player information */
         context.fillText(player.name,posx+5,posy+30);
         context.fillText('seat ' + player.seat,posx+5,posy+55);
-        context.fillText('(' + player.handCount + ')',posx+5,posy+80);
+        // add game status to player whose turn it is for context
+        if (game.turnCount == player.seat)
+            context.fillText('(' + player.handCount + ')' + game.status,posx+5,posy+80);
+        else
+            context.fillText('(' + player.handCount + ')',posx+5,posy+80);
     }
 
-    // paint game from here
+    // note
     paintGame();
 }
 
 
 /**
- * paint game on canvas
+ * @function paintGame
+ * 
+ * paint game functionality on canvas
  * occurs every second after & game starts
  */
 function paintGame ()
@@ -286,7 +293,7 @@ function paintGame ()
     paintDiscard();
     paintHand();
 
-    // calls to painthandtype from here should not change hand type
+    // param -1: calls to painthandtype from here should not change hand type
     // unless player does not have enough tiles for 7 pairs
     paintHandType(-1); 
     paintGroups();
@@ -295,23 +302,22 @@ function paintGame ()
 
 /**
  * @function paintDiscard
- * paint discard pile (middle of canvas)
+ * paint discard pile (middle section)
  * 
  * runs every second from paintGame()
  */
 function paintDiscard ()
 {
-    // NOTE delay updates while dragging tile
-    // @TODO claim sent?
+    // @NOTE delay updates while dragging tile
     if (dragging) return;
 
     // paint discard pile, text
-    // miscellaneous things first
     context.fillStyle = discardColor;
     context.fillRect(280,200,1040,350);
     context.fillStyle = white;
     context.fillText('discard pile',1160,540);
 
+    // provide information on game status (discarded or game over)
     switch (game.status)
     {
         case 'discarded':
@@ -325,9 +331,8 @@ function paintDiscard ()
         context.fillText(game.players[game.turnCount].name + ' won!',750,540);
     }
 
-
-
-    if (game.discardPile.length)
+    // if there are tiles in discard pile to paint
+    if (discardPile.length)
     {
         /** most recent discard 120x152 */
         let x = 290;
@@ -336,7 +341,7 @@ function paintDiscard ()
         if (useTileImages)
         {
             // select, paint tile image
-            let tile = tiles[game.discardPile[0].value + ' ' + game.discardPile[0].suit];
+            let tile = tiles[discardPile[0].value + ' ' + discardPile[0].suit];
             context.drawImage(tile,x,310,120,152);
         }
         else
@@ -345,15 +350,15 @@ function paintDiscard ()
             context.fillRect(x,310,120,152);
             context.fillStyle = 'blue';
             context.font = '60px Arial';
-            context.fillText(game.discardPile[0].value,x,360);
+            context.fillText(discardPile[0].value,x,360);
             context.font = '15px Arial';
-            context.fillText(game.discardPile[0].suit.substring(0,7),x,375);
+            context.fillText(discardPile[0].suit.substring(0,7),x,375);
             context.font = '30px Arial';
         }
     }
 
     /** paint tiles CURRENTLY RECENT 14 */
-    for (let i=1; i<game.discardPile.length; ++i)
+    for (let i=1; i<discardPile.length; ++i)
     {
         // DISPLAY ALL TILES (60x76)
         let x = 220 + (i*70);
@@ -362,7 +367,7 @@ function paintDiscard ()
         if (useTileImages)
         {
             // select, paint tile image
-            let tile = tiles[game.discardPile[i].value + ' ' + game.discardPile[i].suit];
+            let tile = tiles[discardPile[i].value + ' ' + discardPile[i].suit];
             context.drawImage(tile,x,210,60,76);
         }
         else
@@ -371,18 +376,18 @@ function paintDiscard ()
             context.fillRect(x,210,60,76);
             context.fillStyle = 'blue';
             context.font = '30px Arial';
-            context.fillText(game.discardPile[i].value,x,260);
+            context.fillText(discardPile[i].value,x,260);
             context.font = '15px Arial';
-            context.fillText(game.discardPile[i].suit.substring(0,7),x,275);
+            context.fillText(discardPile[i].suit.substring(0,7),x,275);
             context.font = '30px Arial';
         }
 
-        /** @TODO figure how you want to display all tiles */
+        /** @TODO possible improvement: show more tiles (currently most recent 14) */
         if (i == 14) break;
     }
 
     /** paint eat indicators for users that can eat */
-    // NOTE claim should also be empty for this
+    // they didn't just discard, and haven't yet started/sent a claim
     if (game.status == 'discarded' && user.seat != game.turnCount && claim == '')
     {
         context.font = '30px Arial';
@@ -411,8 +416,8 @@ function paintDiscard ()
         }
 
         // NOTE player canWin if they are `waiting`
-        // i.e. need one more valid group to win
-        // if this is the case, its the rightmost group that is not valid
+        // i.e. need one more tile to win
+        // i.e. rightmost group is only non-valid group
         if (total == (triples+eyes-1))
         {
             canWin = true;
@@ -445,9 +450,8 @@ function paintHand ()
     context.fillRect(200,760,1200,130);
     context.strokeRect(200,760,1200,130);
     /** meld bar */
-    context.fillRect(400,661,900,88);
-    context.strokeRect(400,661,900,88);
-
+    context.fillRect(400,581,900,168);
+    context.strokeRect(400,581,900,168);
 
     /** paint tiles */
     for (let i=0; i<hand.length; ++i)
@@ -455,7 +459,7 @@ function paintHand ()
         // @NOTE tile size 60x76
         let x = 210 + (i*70);
 
-        /** show tile images or plain */
+        /** show tile images or plain text */
         if (useTileImages)
         {
             // select, paint tile image
@@ -479,14 +483,15 @@ function paintHand ()
     for (let i=0; i<melds.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 410 + (i * 70);
+        let x = 410 + ((i%12) * 70);
+        let y = 585 + (Math.floor(i/12) * 83);
 
         /** show tile images or plain */
         if (useTileImages)
         {
             // select, paint tile image
             let tile = tiles[melds[i].value + ' ' + melds[i].suit];
-            context.drawImage(tile,x,665,60,76);
+            context.drawImage(tile,x,y,60,76);
         }
         else
         {
@@ -527,15 +532,14 @@ function paintHand ()
         }
     }
 
-    /** @TODO paint melds of other users? */
+    /** paint melds of user to right */
     context.fillRect(1401,100,198,540);
     context.strokeRect(1401,100,198,540);
-
     let arr = game.players[(user.seat+1)%4].melds;
     for (let i=0; i<arr.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 1405 + (Math.floor(i%3) * 65);
+        let x = 1405 + (i%3 * 65);
         let y = 105 + (Math.floor(i/3) * 82);
 
         // select, paint tile image
@@ -543,29 +547,31 @@ function paintHand ()
         context.drawImage(tile,x,y,60,76);
     }
 
-    context.fillRect(250,1,1030,88);
-    context.strokeRect(250,1,1030,88);
 
+    /** paint melds of user across */
+    context.fillRect(250,1,1030,168);
+    context.strokeRect(250,1,1030,168);
     arr = game.players[(user.seat+2)%4].melds;
     for (let i=0; i<arr.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 255 + (i * 65);
+        let x = 255 + ((i%12) * 70);
+        let y = 6 + (Math.floor(i/12) * 81);
 
         // select, paint tile image
         let tile = tiles[arr[i].value + ' ' + arr[i].suit];
-        context.drawImage(tile,x,5,60,76);
+        context.drawImage(tile,x,y,60,76);
     }
 
+    /** paint melds of user to left */
     context.fillRect(1,100,198,550);
     context.strokeRect(1,100,198,550);
-
     arr = game.players[(user.seat+3)%4].melds;
     for (let i=0; i<arr.length; ++i)
     {
         // @NOTE tile size 60x76
-        let x = 5 + (Math.floor(i%3) * 65);
-        let y = 105 + (Math.floor(i/3) * 82);
+        let x = 5 + ((i%3) * 65);
+        let y = 105 + (Math.floor(i/3) * 81);
 
         // select, paint tile image
         let tile = tiles[arr[i].value + ' ' + arr[i].suit];
@@ -578,7 +584,7 @@ function paintHand ()
  * paint hand type
  * 
  * runs every second from paintGame()
- * runs on mousedown on handType panel
+ * also runs on user mousedown on handType panel
  */
 function paintHandType (y)
 {
@@ -640,7 +646,6 @@ function paintHandType (y)
     context.fillText('7 pairs',1450,835);
 
 
-
     /** mark new hand type */
     context.fillStyle = 'red';
     context.fillText(handType,1450,y);
@@ -649,14 +654,13 @@ function paintHandType (y)
 
 /**
  * @function paintGroups
- * valid groups have lightgreen underline
- * otherwise red
+ * valid groups have lightgreen underline, otherwise red
  * 
  * runs every second from paintGame()
  */
 function paintGroups ()
 {
-    // do nothing with empty hand or if swapping tiles
+    // do nothing with empty hand, or if swapping tiles, or if making claim
     if (!hand.length || dragging || claim != '') return;
 
     // j, x, w for placing indicators
@@ -675,7 +679,7 @@ function paintGroups ()
     {
         context.fillStyle = (groups[i][1] == true) ? 'lightgreen' : 'red';
 
-        // eyes cover less tiles
+        // eye indicator width is shorter than for a triple
         if (groups[i][0] == 2)
             w = 110;
         else
@@ -683,7 +687,7 @@ function paintGroups ()
 
         context.fillRect(x,875,w,10);
 
-        // adjust subsequent groups
+        // adjust the `x` for subsequent group indicators
         if (groups[i][0] == 2)
             x += 140;
         else
@@ -692,12 +696,16 @@ function paintGroups ()
 }
 
 /**
- * derive groups from tiles in hand
+ * @function determineGroups
+ * 
+ * derive validity of groups from tiles in hand
  * called from paintGroups() or from eat()
+ * 
+ * if all groups are valid, send WIN update
  */
-function determineGroups()
+function determineGroups ()
 {
-    /** based on current hand type derive number of triples & eyes */
+    /** derive # of triples, eyes based on current handtype */
     switch (handType)
     {
         case 'standard':
@@ -721,10 +729,10 @@ function determineGroups()
     }
     total = 0;
 
-    /** reset/repaint groups */
+    /** reset groups */
     groups = [];
 
-    // group tiles by eyes or triples first
+    // group either the eyes or triples first
     if (eyesFirst)
     {
         checkEyes(0);
@@ -737,14 +745,14 @@ function determineGroups()
     }
 
 
-    // waiting?
+    /** paint waiting indicator */
     context.clearRect(5,850,190,50);
     if (total == groups.length - 1)
     {
         context.fillStyle = 'orange';
         context.fillText('waiting!',40,890);
     }
-    // WINNER
+    // send WIN update if all groups valid
     else if (total == groups.length)
     {
         console.log(total + groups.length);
@@ -753,18 +761,27 @@ function determineGroups()
 }
 
 
+/**
+ * @function checkTriples
+ * 
+ * called from determineGroups()
+ * determine validity of group of three tiles
+ * do it for each triple in the hand
+ */
 function checkTriples (k)
 {
-    // if this is being checked second, adjust groupings index
+    // if this is being checked second, adjust group index
     let l = (k ? eyes : 0);
 
     for (let i=0; i<triples; ++i)
     {
         // `j` index of first tile of triple (0, 3, 6, ...)
         j = k + i*3;
-        // assume grouping is invalid at first
+        // initially assume group is invalid
         groups[l+i] = [3, false];
 
+        // if this is a full triple (3 tiles), we can check validity
+        // otherwise we know its invalid
         if (j+2 < hand.length)
         {
             // read tile values, suits in `hand`
@@ -809,9 +826,16 @@ function checkTriples (k)
     }
 }
 
+/**
+ * @function checkEyes
+ * 
+ * called from determineGroups()
+ * determine validity of group of two tiles
+ * do it for each group of eyes in the hand
+ */
 function checkEyes (k)
 {
-    // if this is being checked second, adjust groupings index
+    // if this is being checked second, adjust groups index
     let l = (k ? triples : 0);
 
     for (let i=0; i<eyes; ++i)
@@ -819,14 +843,16 @@ function checkEyes (k)
         // `j` index of first tile of eyes (3, 5, 7, ...)
         j = k + i*2;
 
+        // initially assume invalid
         groups[l+i] = [2, false];
 
+        // if there are two tiles to compare, check, otherwise group is invalid
         if (j+1 < hand.length)
         {
             /**
              * determine if eyes valid (exact tile match)
              * CANNOT BE FLOWERS
-             * NOTE: stringify tile object to compare properties rather than references
+             * @NOTE: STRINGIFY object to compare PROPERTIES rather than REFERENCES
              */
             if (JSON.stringify(hand[j]) == JSON.stringify(hand[j+1]) && hand[j].suit != 'flowers')
             {
@@ -838,7 +864,11 @@ function checkEyes (k)
 }
 
 
-/** add event listeners to the canvas after start() */
+/**
+ * @function setupEventListeners
+ * 
+ * add event listeners to canvas after start()
+ */
 function setupEventListeners ()
 {
     canvas.addEventListener('mousemove', handleMousemove);
@@ -848,10 +878,11 @@ function setupEventListeners ()
 
 
 /**
- * @EventListener handleMousemove
+ * @function handleMousemove
+ * event listener
  * 
  * capture mouse movement as event
- * 1: display mouse coordinates
+ * 1: display mouse coordinates (if deubgging)
  * 2: drag tiles in hand
  */
 function handleMousemove (e)
@@ -876,29 +907,29 @@ function handleMousemove (e)
         debugElt.innerHTML = output;
     }
     
-    /** dragging mahjong tile */
+    /** dragging tile in hand */
     if (dragging)
     {
-        /** preemptively clear placement indicators (discardPile, bar) */
+        /** preemptively clear place indicators (discardPile, bar) */
         context.fillStyle = discardColor;
         context.fillRect(520,530,400,10);
         context.fillStyle = darkenColor;
         context.fillRect(205,770,1190,10);
 
         /**
-         * mouse hovering over discard pile
-         * check conditions if we can highlight discard pile
+         * check if we can discard
+         * must be our (discarding) turn, dragging and hovering over discard pile
          */
         if (user.seat == game.turnCount && game.status == 'discarding' && between(e.offsetY,200,550))
         {
             // discard on mouseup
             indexToPlace = -1;
 
-            // yellow indicator on discard pile
+            // paint yellow place indicator on discard pile
             context.fillStyle = 'yellow';
             context.fillRect(520,530,400,10);
         }
-        /* mouse hovering over tiles */
+        /* dragging, hovering over tiles */
         else
         {
             /* tile to swap on mouseup */
@@ -908,7 +939,7 @@ function handleMousemove (e)
             if (indexToPlace < 0) indexToPlace = 0;
             if (indexToPlace > hand.length-1) indexToPlace = hand.length-1;
 
-            // yellow indicator on indexToPlace
+            // paint yellow place indicator on indexToPlace
             context.fillStyle = 'yellow';
             context.fillRect(220+(70*indexToPlace),770,40,10);
         }
@@ -917,29 +948,30 @@ function handleMousemove (e)
 }
 
 /**
- * @EventListener handleMousedown
+ * @function handleMousedown
+ * event listener
  * 
  * capture mouse down as event
  * 1: select tile to drag
  * 2: changing hand type
- * 3: trying to chow, pung, or kong
+ * 3: making/cancelling claims
  */
 function handleMousedown (e)
 {
-    /** do nothing if still in lobby */
+    /** ignore if game has not started */
     if (game.status == 'waiting') return;
 
-    // behavior if currently trying to claim
+    // user currently making claim
     if (claim != '')
     {
-        // @TODO CHOW, PUNG
+        // selecting tile for chow/pung
         if (between(e.offsetY,790,866) && between(e.offsetX,210,210+hand.length*70))
         {
-            // set tileSelected
+            // set tileSelected and call eat()
             tileSelected = Math.floor((e.offsetX - 210)/70);
             eat(tileSelected);
         }
-        // cancel button
+        // cancel button to cancel claim
         else if (between(e.offsetX,5,105) && between(e.offsetY,740,780))
         {
             // undo sent claims
@@ -947,15 +979,15 @@ function handleMousedown (e)
             {
                 updateSession('cancel', 'cancel');
                 claimSent = false;
-                eating = [];
             }
             claim = '';
+            eating = [];
             
-            // TODO clear the AREA
+            // clear the AREA
             context.clearRect(5,700,190,200);
         }
     }
-    else // no claim -> regular mousedown behavior
+    else // not making claim
     {
         /** select tile to drag */
         if (between(e.offsetY,790,866) && between(e.offsetX,210,210+hand.length*70))
@@ -964,8 +996,8 @@ function handleMousedown (e)
             tileSelected = Math.floor((e.offsetX - 210)/70);
 
             /**
-             * suit: flower?
-             * tile: hand index tSelected -> melds, exit
+             * if `tileSelected` is FLOWER suit,
+             * move the tile from our HAND to MELDS, then exit
              */
             if (hand[tileSelected].suit == 'flowers')
             { 
@@ -978,11 +1010,11 @@ function handleMousedown (e)
                 return;
             }
 
-            // sanity: indexToPlace is the same tile
-            // so if immediate mouseup, no tile swap
+            // sanity: indexToPlace & tileSelected are the same
+            // i.e. if immediate mouseup, no tile swap
             indexToPlace = tileSelected;
 
-            // yellow indicator on `indexToPlace`
+            // paint yellow place indicator on `indexToPlace`
             context.fillStyle = 'yellow';
             context.fillRect(220+(70*indexToPlace),770,40,10);
 
@@ -1021,23 +1053,36 @@ function handleMousedown (e)
                 let dTile = JSON.stringify(discardPile[0]);
 
                 // iterate through hand
-                // index of all (3) exact matches
+                // find index of all (3) exact matches
                 // tiles (3): hand -> message
                 hand.forEach((tile, i) => {
                     if (dTile == JSON.stringify(tile))
                         eating.push(i);
                 });
 
-                // reverse sort
+                // reverse sort the indices
                 eating.sort((a,b) => b - a);
 
-                // @TODO instead lets keep in hand
-                // and paint lightgreen over the tiles
-                // tiles (3): hand -> hold
+                context.fillStyle = 'lightgreen';
+                context.fillText(claim + ' sent!',5,730);
+
+                // paint lightgreen claim indicator over the tiles
                 for (let i=0; i<3; ++i)
                 {
+                    let x = (220 + (70*eating[i]));
+                    context.fillRect(x,770,40,10);
                 }
 
+                // paint cancel button
+                context.font = '30px Arial';
+                context.fillStyle = 'white';
+                context.fillRect(5,740,100,40);
+                context.fillStyle = 'black';
+                context.fillText('cancel',10,770);
+
+                // send claim update with the tile indices
+                // they get moved to hold there, not here
+                // on success they would be moved to melds
                 updateSession('kong', eating);
                 claimSent = true;
             }
@@ -1051,35 +1096,59 @@ function handleMousedown (e)
     // console.log(e);
 }
 
-// by the end we want to update session
+/**
+ * @function eat
+ * eat tiles
+ * 
+ * @param i
+ * selector for how this function behaves
+ * 
+ * at the end, send claim updat
+ */
 function eat (i)
 {
-    // @TODO
+    /** do nothing if the claim already sent @TODO is this needed? */
     if (claimSent) return;
+
     context.font = '20px Arial';
 
-    // start claims with -2, -1
+    // if i == -2 or -1 we are starting a claim
     switch (i)
     {
         // win claims (-2) execute instantly
         case -2:
-            // fill eye
+            // if the last group is an eye, need discarded tile to be exact match
             if (groups[groups.length-1][0] == 2)
             {
                 if (JSON.stringify(hand[hand.length-1]) == JSON.stringify(discardPile[0]))
                 {
                     /** update.php: claim win with last tile */
                     updateSession('cWin', 1);
+                    context.fillStyle = 'lightgreen';
+                    context.fillText(claim + ' sent!',5,730);
+ 
+                    // paint lightgreen claim indicators
+                    let x = 220 + (70*(hand.length-1));
+                    context.fillRect(x,770,40,10);
+
+                    // paint cancel button
+                    context.font = '30px Arial';
+                    context.fillStyle = 'white';
+                    context.fillRect(5,740,100,40);
+                    context.fillStyle = 'black';
+                    context.fillText('cancel',10,770);
                 }
                 else
                 {
-                    context.font = '20px Arial';
-                    context.fillStyle = 'black';
-                    context.clearRect(5,700,190,200);
+                    context.clearRect(0,700,190,200);
+                    context.fillStyle = 'red';
                     context.fillText(claim + ' failed: invalid',5,730);
+
+                    claim = '';
                 }
             }
-            else // fill triple
+            // if the last group is a triple, need discarded tile to form valid triple
+            else
             {
                 // read tile values, suits in `hand`
                 let values = [
@@ -1105,13 +1174,28 @@ function eat (i)
                 {
                     /** update.php: claim win with last 2 tiles */
                     updateSession('cWin', 2);
+                    context.fillStyle = 'lightgreen';
+                    context.fillText(claim + ' sent!',5,730);
+
+                    // paint lightgreen claim indicators
+                    let x = 220 + (70*(hand.length-2));
+                    context.fillRect(x,770,40,10);
+                    context.fillRect(x+70,770,40,10);
+
+                    // paint cancel button
+                    context.font = '30px Arial';
+                    context.fillStyle = 'white';
+                    context.fillRect(5,740,100,40);
+                    context.fillStyle = 'black';
+                    context.fillText('cancel',10,770);
                 }
                 else
                 {
-                    context.font = '20px Arial';
-                    context.fillStyle = 'black';
                     context.clearRect(0,700,190,200);
+                    context.fillStyle = 'red';
                     context.fillText(claim + ' failed: invalid',5,730);
+
+                    claim = '';
                 }
             }
             return;
@@ -1124,6 +1208,7 @@ function eat (i)
             context.clearRect(0,700,190,200);
             context.fillText(claim + ': select 2 tile(s)',5,730);
 
+            // paint cancel button
             context.font = '30px Arial';
             context.fillStyle = 'white';
             context.fillRect(5,740,100,40);
@@ -1139,7 +1224,7 @@ function eat (i)
         || (eating.length == 1 && i == eating[0]))
         return;
 
-    // push it
+    // push to eating array
     eating.push(i);
 
     // paint green eat indicator
@@ -1147,16 +1232,16 @@ function eat (i)
     context.fillStyle = 'lightgreen';
     context.fillRect(x,770,40,10);
 
-    // 2 tiles in `eating`: check claim validity
+    // 2 tiles in `eating`: check claim and send if valid
     if (eating.length == 2)
     {
         let valid = false;
         // reverse sort indices for hand splice
         eating.sort((a,b) => b - a);
 
-        console.log('checking validity now' + JSON.stringify(eating));
+        console.log('checking claim validity' + JSON.stringify(eating));
 
-        // @TODO CAN'T DO WINDS OR DRAGONS??
+        // @NOTE CAN'T DO WINDS OR DRAGONS??
         if (claim == 'chow')
         {
             // read tile values, suits in `hand`
@@ -1173,7 +1258,7 @@ function eat (i)
             let suit2 = hand[eating[1]].suit;
 
             // suits match + 3 straight: chow
-            valid = (suit0 == suit1 && suit1 == suit2 && values[1]-values[0] == 1 && values[2]-values[1] == 1);
+            valid = (suit0 == suit1 && suit1 == suit2 && values[1]-values[0] == 1 && values[2]-values[1] == 1 && suit0 != 'dragons' && suit0 != 'winds');
         } 
         else if (claim == 'pung')
         {
@@ -1195,6 +1280,7 @@ function eat (i)
         }
         else
         {
+            context.fillStyle = 'red';
             context.fillText(claim + ' failed: invalid',5,730);
             // clear cancel button
             context.clearRect(5,740,100,40);
@@ -1225,7 +1311,7 @@ async function handleMouseup (e)
 
     if (dragging)
     {
-        /** @TODO user can discard if its their turn */
+        /** @NOTE user can discard if its their turn */
         if (user.seat == game.turnCount && game.status == 'discarding' && between(e.offsetY,200,550))
         {
             // discarded tile: hand -> discardPile
@@ -1233,7 +1319,7 @@ async function handleMouseup (e)
             let [tileDiscarded] = hand.splice(tileSelected, 1);
             // console.log(tileDiscarded.value + tileDiscarded.suit[0]);
 
-            // changes to the discard pile come with session update
+            /** call update.php to discard the tile in database */
             updateSession('discard', tileSelected);
         }
         /** arrange tiles in hand */
@@ -1250,6 +1336,7 @@ async function handleMouseup (e)
             await updateSession('arrange', [tileSelected, indexToPlace]);
         }
 
+        // update global variable and call functions
         dragging = false;
         paintHand();
         paintGroups();
@@ -1257,7 +1344,14 @@ async function handleMouseup (e)
     // console.log(e);
 }
 
-// update database with new state
+/**
+ * @function updateSession
+ * @call update.php
+ * update database with new state
+ * 
+ * @param action the type of update that we're pushing
+ * @param message provide context to the update
+ */
 async function updateSession (action, message)
 {
     try
@@ -1289,7 +1383,8 @@ async function updateSession (action, message)
 }
 
 /**
- * @function loop.php
+ * @function gameLoop
+ * @call loop.php
  * 
  * fetch latest state from database,
  * update session & player view
@@ -1335,7 +1430,6 @@ async function gameLoop ()
                 claim = '';
                 claimSent = false;
             }
-
 
             // check
             game.status == 'waiting' ? paintLobby() : paintPlayers();

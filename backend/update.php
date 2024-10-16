@@ -1,13 +1,13 @@
 <?php
 /**
- * presumably you run this script in multiple scenarios:
+ * run this script in multiple scenarios:
  * 
  * 1: place flower from hand to melds
  * 2: arranging hand
  * 3: tile discard
  * 4: attempt to eat discarded tile
  * 5: canceling attempt to eat
- * 5: finish the game
+ * 6: finish the game
  */
 session_start();
 header('Content-Type: application/json'); # output json response
@@ -88,7 +88,10 @@ $melds = json_decode($player['PlayerMelds'], true);
 $hold = json_decode($player['PlayerHold'], true);
 
 
-// switch case for performing action
+/**
+ * SWITCH on 'action'
+ * select between possible updates
+ */
 switch ($input['action'])
 {
     /** place flower tile in melds */
@@ -129,11 +132,13 @@ switch ($input['action'])
         $game['GameStatus'] = 'discarded';
         break;
     
-    // @TODO request, not immediate
-    // idea: tiles: hand indices (message) -> hold
-    // input action -> hold index 0
-    // later in loop.php, if player discard goes through,
-    // tiles: hold -> melds, along with discarded tile
+    /**
+     * claims are requests, not immediate
+     * idea: tiles: hand indices (message) -> hold
+     * input action -> hold index 0
+     * later in loop.php, if player discard goes through,
+     * tiles: hold -> melds, along with discarded tile
+     */
     case 'chow':
     case 'kong':
     case 'pung':
@@ -154,12 +159,12 @@ switch ($input['action'])
         }
         break;
     
-    // win claims handle different
+    // updating with win claims
     case 'cWin':
         $hold = []; # reset hold
 
         // hold index 0: claim type
-        $hold[] = $input['action'];
+        $hold[] = 'win';
 
         // for win claims, `n` is integer
         $n = $input['message'];
@@ -172,19 +177,25 @@ switch ($input['action'])
 
         break;
     
-    // @TODO cancel functionality
+    // cancel button for cancelling claims
     case 'cancel':
+        // if cancelling kong it may be 3 tiles
         // tiles: hold index 2,1 -> hand
+        if (count($hold) == 4)
+            $hand[] = array_splice($hold,3,1)[0];
+
         $hand[] = array_splice($hold,2,1)[0];
         $hand[] = array_splice($hold,1,1)[0];
 
         $hold = []; # remove claim type
         break;
 
+    /**
+     * @NOTE in order to win, it must be player's (our) turn
+     * this doesn't come from claiming a win on discard
+     * moreso when someone draws/arranges to a win
+     */
     case 'win':
-        // @TODO NOTE in order to win, it must be player's (our) turn
-        // this doesn't come from claiming a win on discard
-        // moreso when someone draws/arranges to a win
         $game['GameStatus'] = 'finished';
         break;
 

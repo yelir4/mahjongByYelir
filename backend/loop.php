@@ -1,7 +1,7 @@
 <?php
 /**
- * script runs every second by each player
- * different behavior depending on player's seat
+ * runs every second for each player
+ * behavior depends on player's seat
  */
 session_start();
 header('Content-Type: application/json'); # output json response
@@ -45,6 +45,8 @@ if (!isset($_SESSION['game']))
     echo json_encode(['success' => false, 'message' => $message . 'requires active session']);
     exit();
 }
+
+// @TODO method post ?
 
 // retrieve game
 $sql = "
@@ -90,13 +92,13 @@ foreach ($players as $i => $player)
     }
 }
 
-// NOTE by default users CANNOT claim tiles
+// by default users CANNOT claim tiles
 $_SESSION['user']['canChow'] = false;
 $_SESSION['user']['canPung'] = false;
 $_SESSION['user']['canKong'] = false;
 
 /**
- * account for possible game states every second
+ * account for possible game status
  * 
  * 1: waiting (for 4 players)
  * 2: discarded tile
@@ -151,7 +153,7 @@ switch ($game['GameStatus'])
             // start timer
             if ($game['GameSeconds'] == -1)
             {
-                $game['GameSeconds'] = 12;
+                $game['GameSeconds'] = 10;
             }
             // decrement timer
             else
@@ -191,7 +193,7 @@ switch ($game['GameStatus'])
                                     $prec = $i+3;
                                     break;
                                 case 'chow':
-                                    // Tight->7, only legal win claim
+                                    // right->7, only legal win claim
                                     $prec = $i+6;
                                     break;
                             }
@@ -327,8 +329,8 @@ switch ($game['GameStatus'])
 
             // chow if three tile straight in hand (ex: 1, 2, 3)
             // NOTE dragons and winds don't have sequential series, cant chow
-            // @TODO can only chow if in position or can win?
-            if ($game['GameTurnCount'] == (($seat-1)%4) &&
+            // @TODO can only chow if discard was from player on immediate left
+            if ($game['GameTurnCount'] == (($seat+3)%4) &&
                 $tile['suit'] != 'dragons' &&
                 $tile['suit'] != 'winds' &&
                 ($has2Lower && $hasLower ||
